@@ -1,7 +1,6 @@
 const arg = require("arg");
 const inquirer = require("inquirer");
-
-import Scanner from "./scanner";
+const Scanner = require("./scanner");
 
 export async function cli(args) {
     let options = await parseArguments(args);

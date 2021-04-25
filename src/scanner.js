@@ -5,6 +5,8 @@ const axios = require("axios");
 const readdirp = require("readdirp");
 const crypto = require("crypto");
 
+const Plugin = require("./plugin");
+
 class Scanner {
     constructor(credentials, localPath) {
         this.credentials = credentials;
@@ -17,7 +19,8 @@ class Scanner {
             await this.downloadFiles();
         }
 
-        this.compareChecksums();
+        //this.compareCoreChecksums();
+        this.comparePluginChecksums();
     }
 
     async downloadFiles() {
@@ -49,10 +52,16 @@ class Scanner {
 
         let path = __dirname.split("/");
         path.pop();
-        this.localPath = path.join("/") + "/scans/" + this.credentials.host + "." + this.credentials.username;
+        let scanPath = path.join("/") + "/scans/";
+        this.localPath = scanPath + this.credentials.host + "." + this.credentials.username;
+
+        if (!fs.existsSync(scanPath)) {
+            fs.mkdirSync(scanPath);
+        }
         if (!fs.existsSync(this.localPath)) {
             fs.mkdirSync(this.localPath);
         }
+
         return this.localPath;
     }
 
@@ -84,29 +93,25 @@ class Scanner {
         return checksums;
     }
 
-    async getPluginChecksums(slug, version) {
-        var checksums = null;
-
-        await axios.get("https://api.wordpress.org/plugin-checksums/" + slug + "/" + version + ".json").then((response) => {
-            checksums = response.data.checksums[this.getWordPressVersion()];
-        });
-
-        return checksums;
-    }
-
     async compareCoreChecksums() {
         let coreChecksums = await this.getCoreChecksums();
         let failedFiles = [];
 
-        /* Loop Through every file inside Wordpress Folder except wp-content */
+        let readdirSettings = {
+            entryType: "all",
+            directoryFilter: ["!languages", "!plugins", "!upgrade", "!cache"],
+        };
 
-        for await (const file of readdirp(this.localPath, {entryType: "all"})) {
+        /* Loop Through every file inside Wordpress Folder
+         *  and compare official core cheksum with checksum of the file
+         */
+        for await (const file of readdirp(this.localPath, readdirSettings)) {
             if (fs.lstatSync(file.fullPath).isDirectory()) continue;
             let checksum = await this.getFileHash(file.fullPath);
 
-            let coreChecksum = coreChecksum[file.path];
+            let coreChecksum = coreChecksums[file.path];
 
-            if (!officialChecksum || checksum !== officialChecksum.replaceAll("\\")) {
+            if (!coreChecksum || checksum !== coreChecksum.replaceAll("\\")) {
                 failedFiles.push(file.path);
             }
         }
@@ -114,7 +119,24 @@ class Scanner {
         return failedFiles;
     }
 
-    async comparePluginChecksums() {}
+    async comparePluginChecksums() {
+        let coreChecksums = await this.getCoreChecksums();
+        let failedFiles = [];
+
+        let readdirSettings = {
+            entryType: "directories",
+            depth: 0,
+        };
+
+        for await (const file of readdirp(this.localPath + "/wp-content/plugins", readdirSettings)) {
+            let plugin = new Plugin(file.fullPath, file.basename);
+            await plugin.init();
+
+            if (!plugin.official) continue;
+        }
+
+        return failedFiles;
+    }
 
     getFileHash(filename) {
         return new Promise((resolve, reject) => {
