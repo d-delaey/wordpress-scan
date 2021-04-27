@@ -10,7 +10,6 @@ const Plugin = require("./plugin");
 class Scanner {
     constructor(credentials, localPath) {
         this.credentials = credentials;
-
         this.localPath = localPath;
     }
 
@@ -19,8 +18,9 @@ class Scanner {
             await this.downloadFiles();
         }
 
-        //this.compareCoreChecksums();
-        this.comparePluginChecksums();
+        const [failedPluginFiles, failedCoreFiles] = await Promise.all([this.comparePluginChecksums(), this.compareCoreChecksums()]);
+        let failedFiles = failedPluginFiles.concat(failedCoreFiles);
+        console.log(failedFiles);
     }
 
     async downloadFiles() {
@@ -131,8 +131,9 @@ class Scanner {
         for await (const file of readdirp(this.localPath + "/wp-content/plugins", readdirSettings)) {
             let plugin = new Plugin(file.fullPath, file.basename);
             await plugin.init();
-
             if (!plugin.official) continue;
+
+            failedFiles = await plugin.compareChecksum();
         }
 
         return failedFiles;
@@ -151,7 +152,6 @@ class Scanner {
                     return resolve(hash);
                 });
             } catch (error) {
-                console.log("blub");
                 return reject("calc fail");
             }
         });
