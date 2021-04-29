@@ -36,7 +36,7 @@ async function parseArguments(rawArgs) {
     }
 
     if (args["--download"]) {
-        options.downloadFiles = true;
+        options.sshCredentials.downloadFiles = true;
 
         options.sshCredentials.host = args["--host"] || false;
         options.sshCredentials.username = args["--username"] || false;

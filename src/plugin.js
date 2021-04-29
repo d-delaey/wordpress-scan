@@ -46,9 +46,9 @@ class Plugin {
 
         let version = EntryFileData.split("\n")
             .find((line) => line.includes("Version:"))
-            .split(" ");
+            .replace(/[^0-9|.]/g, "");
 
-        this.version = version[version.length - 1].replace(/[^0-9|.]/g, "");
+        this.version = version[version.length - 1];
 
         return this.version;
     }
@@ -59,7 +59,7 @@ class Plugin {
         await axios
             .get("https://downloads.wordpress.org/plugin-checksums/" + this.name + "/" + this.version + ".json", {
                 validateStatus: function (status) {
-                    return status !== 404 || status !== 500; // Resolve only if the status code is less than 500
+                    return status !== 404 || status !== 500;
                 },
             })
             .then((response) => {
@@ -106,11 +106,7 @@ class Plugin {
         if (this.offical) return this.official;
 
         await axios.get("https://api.wordpress.org/stats/plugin/1.0/" + this.name).then((response) => {
-            if (!response.data) {
-                this.official = false;
-            } else {
-                this.official = true;
-            }
+            this.official = response.data ? true : false;
         });
 
         return this.official;

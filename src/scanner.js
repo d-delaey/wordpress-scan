@@ -14,10 +14,11 @@ class Scanner {
     }
 
     async start() {
-        if (Object.keys(this.credentials).length !== 0) {
+        if (this.credentials.downloadFiles) {
             await this.downloadFiles();
         }
 
+        // get failed checksums from WordPress Core and Plugins
         const [failedPluginFiles, failedCoreFiles] = await Promise.all([this.comparePluginChecksums(), this.compareCoreChecksums()]);
         let failedFiles = failedPluginFiles.concat(failedCoreFiles);
         console.log(failedFiles);
@@ -25,8 +26,6 @@ class Scanner {
 
     async downloadFiles() {
         if (!this.ssh) this.ssh = new NodeSSH();
-
-        let wordpressRootCommand = "cd " + this.credentials.wordpressRoot + " && ";
 
         if (!this.ssh.isConnected()) {
             let args = {
@@ -50,17 +49,22 @@ class Scanner {
     createDownloadPath() {
         if (this.localPath) return this.localPath;
 
-        let path = __dirname.split("/");
-        path.pop();
-        let scanPath = path.join("/") + "/scans/";
-        this.localPath = scanPath + this.credentials.host + "." + this.credentials.username;
+        // create random Prefix
+        let projectPrefix = crypto.randomBytes(4).toString("hex");
 
-        if (!fs.existsSync(scanPath)) {
-            fs.mkdirSync(scanPath);
+        // Build Download Path and Project Path
+        let localPath = path.resolve("./", "scans", this.credentials.host + "." + this.credentials.username, projectPrefix);
+
+        // for safety reason we check if path exists
+        if (fs.existsSync(localPath)) {
+            console.error("Download Path " + localPath + " exists.");
+            process.exit(1);
         }
-        if (!fs.existsSync(this.localPath)) {
-            fs.mkdirSync(this.localPath);
-        }
+
+        //creating path
+        fs.mkdirSync(localPath, {recursive: true});
+
+        this.localPath = localPath;
 
         return this.localPath;
     }
@@ -68,17 +72,16 @@ class Scanner {
     getWordPressVersion() {
         if (this.wordpressVersion) return this.wordpressVersion;
 
-        let versionFile = this.localPath + "/wp-includes/version.php";
+        let versionFile = path.join(this.localPath, "/wp-includes/version.php");
         let data = fs.readFileSync(versionFile, "utf8");
 
-        /* @TODO make this better :D */
         // this splits the version.php file into an array where each line is a entry
-        // its match the wordpress version between ' ' and then replace ' with nothing so
-        // there is only the version left
+        // then its finds the line containing the WordPress Version
+        // and then deletes everything except numbers and dots
         this.wordpressVersion = data
-            .split("\n")[15]
-            .match(/\'(.*)\'/, "$1")[0]
-            .replaceAll("'", "");
+            .split("\n")
+            .find((line) => line.includes("wp_version ="))
+            .replaceAll(/[^0-9|.]/g, "");
 
         return this.wordpressVersion;
     }
@@ -120,7 +123,6 @@ class Scanner {
     }
 
     async comparePluginChecksums() {
-        let coreChecksums = await this.getCoreChecksums();
         let failedFiles = [];
 
         let readdirSettings = {
