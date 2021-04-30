@@ -1,7 +1,8 @@
 const readdirp = require("readdirp");
 const axios = require("axios");
 const fs = require("fs");
-const crypto = require("crypto");
+
+const Helper = require("./helper");
 
 class Plugin {
     constructor(path, name) {
@@ -48,7 +49,7 @@ class Plugin {
             .find((line) => line.includes("Version:"))
             .replace(/[^0-9|.]/g, "");
 
-        this.version = version[version.length - 1];
+        this.version = version;
 
         return this.version;
     }
@@ -73,29 +74,36 @@ class Plugin {
 
     async compareChecksum() {
         let pluginChecksums = await this.getChecksum();
-        let failedFiles = [];
+        let failedFiles = {Plugin: this.name, Modified: [], Unofficial: [], Error: []};
 
+        // if plugin cannot be find
         if (!pluginChecksums) {
-            failedFiles.push("Plugin " + this.name + " Not Found");
+            failedFiles.Error.push("Plugin " + this.name + " Not Found");
             return failedFiles;
         }
 
         for await (const file of readdirp(this.path, {entryType: "all"})) {
             if (fs.lstatSync(file.fullPath).isDirectory()) continue;
-            let checksum = await this.getFileHash(file.fullPath);
+            let checksum = await Helper.getFileHash(file.fullPath);
 
             let pluginChecksum = pluginChecksums[file.path].md5;
 
             if (pluginChecksum instanceof Array) {
                 let result = pluginChecksum.every((entryHash) => checksum == entryHash);
+
                 if (!result) {
-                    failedFiles.push(file.path);
+                    failedFiles.Modified.push(file.path);
                 }
                 continue;
             }
 
-            if (!pluginChecksum || checksum !== pluginChecksum.replaceAll("\\")) {
-                failedFiles.push(file.path);
+            if (!pluginChecksum) {
+                failedFiles.UnOfficial.push(file.path);
+                continue;
+            }
+
+            if (checksum !== pluginChecksum.replaceAll("\\")) {
+                failedFiles.Modified.push(file.path);
             }
         }
 
@@ -110,24 +118,6 @@ class Plugin {
         });
 
         return this.official;
-    }
-
-    getFileHash(filename) {
-        return new Promise((resolve, reject) => {
-            let shasum = crypto.createHash("md5");
-            try {
-                let s = fs.ReadStream(filename);
-                s.on("data", function (data) {
-                    shasum.update(data);
-                });
-                s.on("end", function () {
-                    const hash = shasum.digest("hex");
-                    return resolve(hash);
-                });
-            } catch (error) {
-                return reject("calc fail");
-            }
-        });
     }
 }
 

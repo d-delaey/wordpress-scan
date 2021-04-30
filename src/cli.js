@@ -3,11 +3,14 @@ const inquirer = require("inquirer");
 const Scanner = require("./scanner");
 
 export async function cli(args) {
+    console.time("Execution");
     let options = await parseArguments(args);
 
     let scanner = new Scanner(options.sshCredentials, options.localPath);
+    console.log(process.cwd());
 
-    scanner.start();
+    await scanner.start();
+    console.timeEnd("Execution");
 }
 
 async function parseArguments(rawArgs) {

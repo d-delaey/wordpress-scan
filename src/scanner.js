@@ -6,6 +6,7 @@ const readdirp = require("readdirp");
 const crypto = require("crypto");
 
 const Plugin = require("./plugin");
+const Helper = require("./helper");
 
 class Scanner {
     constructor(credentials, localPath) {
@@ -20,8 +21,8 @@ class Scanner {
 
         // get failed checksums from WordPress Core and Plugins
         const [failedPluginFiles, failedCoreFiles] = await Promise.all([this.comparePluginChecksums(), this.compareCoreChecksums()]);
-        let failedFiles = failedPluginFiles.concat(failedCoreFiles);
-        console.log(failedFiles);
+        console.log(failedCoreFiles);
+        console.log(failedPluginFiles);
     }
 
     async downloadFiles() {
@@ -98,7 +99,7 @@ class Scanner {
 
     async compareCoreChecksums() {
         let coreChecksums = await this.getCoreChecksums();
-        let failedFiles = [];
+        let failedFiles = {Modified: [], Unofficial: [], Error: []};
 
         let readdirSettings = {
             entryType: "all",
@@ -110,12 +111,17 @@ class Scanner {
          */
         for await (const file of readdirp(this.localPath, readdirSettings)) {
             if (fs.lstatSync(file.fullPath).isDirectory()) continue;
-            let checksum = await this.getFileHash(file.fullPath);
+            let checksum = await Helper.getFileHash(file.fullPath);
 
             let coreChecksum = coreChecksums[file.path];
 
-            if (!coreChecksum || checksum !== coreChecksum.replaceAll("\\")) {
-                failedFiles.push(file.path);
+            if (!coreChecksum) {
+                failedFiles.Unofficial.push(file.path);
+                continue;
+            }
+
+            if (checksum !== coreChecksum.replaceAll("\\")) {
+                failedFiles.Modified.push(file.path);
             }
         }
 
@@ -123,7 +129,8 @@ class Scanner {
     }
 
     async comparePluginChecksums() {
-        let failedFiles = [];
+        let failedFiles = {};
+        let checksumPromises = [];
 
         let readdirSettings = {
             entryType: "directories",
@@ -135,28 +142,14 @@ class Scanner {
             await plugin.init();
             if (!plugin.official) continue;
 
-            failedFiles = await plugin.compareChecksum();
+            checksumPromises.push(plugin.compareChecksum());
         }
 
-        return failedFiles;
-    }
-
-    getFileHash(filename) {
-        return new Promise((resolve, reject) => {
-            let shasum = crypto.createHash("md5");
-            try {
-                let s = fs.ReadStream(filename);
-                s.on("data", function (data) {
-                    shasum.update(data);
-                });
-                s.on("end", function () {
-                    const hash = shasum.digest("hex");
-                    return resolve(hash);
-                });
-            } catch (error) {
-                return reject("calc fail");
-            }
+        await Promise.all(checksumPromises).then((results) => {
+            failedFiles = results;
         });
+
+        return failedFiles;
     }
 }
 
