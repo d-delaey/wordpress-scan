@@ -2,7 +2,7 @@ const readdirp = require("readdirp");
 const axios = require("axios");
 const fs = require("fs");
 
-const Helper = require("./helper");
+const Helper = require("./Helper");
 
 class Plugin {
     constructor(path, name) {

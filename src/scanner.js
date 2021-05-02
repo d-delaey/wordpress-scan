@@ -6,10 +6,10 @@ const readdirp = require("readdirp");
 const crypto = require("crypto");
 
 const Plugin = require("./plugin");
-const Helper = require("./helper");
+const Helper = require("./Helper");
 
 class Scanner {
-    constructor(credentials, localPath) {
+    constructor() {
         this.credentials = credentials;
         this.localPath = localPath;
     }
@@ -20,12 +20,12 @@ class Scanner {
         }
 
         // get failed checksums from WordPress Core and Plugins
-        const [failedPluginFiles, failedCoreFiles] = await Promise.all([this.comparePluginChecksums(), this.compareCoreChecksums()]);
+        const [failedPluginFiles, failedCoreFiles] = await Promise.all([this.compareLocalPluginChecksums(), this.compareLocalCoreChecksums()]);
         console.log(failedCoreFiles);
         console.log(failedPluginFiles);
     }
 
-    async downloadFiles() {
+    /*async downloadFiles() {
         if (!this.ssh) this.ssh = new NodeSSH();
 
         if (!this.ssh.isConnected()) {
@@ -45,32 +45,9 @@ class Scanner {
         });
 
         this.ssh.dispose();
-    }
+    }*/
 
-    createDownloadPath() {
-        if (this.localPath) return this.localPath;
-
-        // create random Prefix
-        let projectPrefix = crypto.randomBytes(4).toString("hex");
-
-        // Build Download Path and Project Path
-        let localPath = path.resolve("./", "scans", this.credentials.host + "." + this.credentials.username, projectPrefix);
-
-        // for safety reason we check if path exists
-        if (fs.existsSync(localPath)) {
-            console.error("Download Path " + localPath + " exists.");
-            process.exit(1);
-        }
-
-        //creating path
-        fs.mkdirSync(localPath, {recursive: true});
-
-        this.localPath = localPath;
-
-        return this.localPath;
-    }
-
-    getWordPressVersion() {
+    /*getWordPressVersion() {
         if (this.wordpressVersion) return this.wordpressVersion;
 
         let versionFile = path.join(this.localPath, "/wp-includes/version.php");
@@ -85,7 +62,7 @@ class Scanner {
             .replaceAll(/[^0-9|.]/g, "");
 
         return this.wordpressVersion;
-    }
+    }*/
 
     async getCoreChecksums() {
         var checksums = null;
@@ -97,7 +74,7 @@ class Scanner {
         return checksums;
     }
 
-    async compareCoreChecksums() {
+    async compareLocalCoreChecksums() {
         let coreChecksums = await this.getCoreChecksums();
         let failedFiles = {Modified: [], Unofficial: [], Error: []};
 
@@ -128,7 +105,7 @@ class Scanner {
         return failedFiles;
     }
 
-    async comparePluginChecksums() {
+    async compareLocalPluginChecksums() {
         let failedFiles = {};
         let checksumPromises = [];
 

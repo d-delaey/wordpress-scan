@@ -1,3 +1,5 @@
+import RemoteScanner from "./RemoteScanner";
+
 const arg = require("arg");
 const inquirer = require("inquirer");
 const Scanner = require("./scanner");
@@ -5,18 +7,22 @@ const Scanner = require("./scanner");
 export async function cli(args) {
     console.time("Execution");
     let options = await parseArguments(args);
+    console.log(options);
 
-    let scanner = new Scanner(options.sshCredentials, options.localPath);
+    let scanner = new RemoteScanner(options.sshCredentials, options.wordpressRoot);
+    await scanner.init();
+
+    /*let scanner = new Scanner(options.sshCredentials, options.localPath);
     console.log(process.cwd());
 
     await scanner.start();
-    console.timeEnd("Execution");
+    console.timeEnd("Execution");*/
 }
 
 async function parseArguments(rawArgs) {
     const args = arg(
         {
-            "--download": Boolean,
+            "--remote": Boolean,
             "--host": String,
             "--username": String,
             "--password": String,
@@ -31,16 +37,11 @@ async function parseArguments(rawArgs) {
     );
     let options = {};
     options.downloadFiles = false;
-    options.sshCredentials = {};
     options.localPath = args["--path"];
+    options.wordpressRoot = args["--wordpressRoot"];
+    options.sshCredentials = {};
 
-    if (!options.localPath && !args["--download"]) {
-        throw "Missing required Parameter";
-    }
-
-    if (args["--download"]) {
-        options.sshCredentials.downloadFiles = true;
-
+    if (args["--remote"]) {
         options.sshCredentials.host = args["--host"] || false;
         options.sshCredentials.username = args["--username"] || false;
         options.sshCredentials.password = args["--password"] || false;
