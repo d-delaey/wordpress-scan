@@ -1,5 +1,6 @@
 /* SSH Connection Class */
-const Connection = require("./Connection");
+import Connection from "./Connection";
+//const Connection = require("./Connection");
 
 class RemoteScanner {
     constructor(credentials, root) {
@@ -12,6 +13,9 @@ class RemoteScanner {
     async init() {
         await this.setupConnection();
         await this.verifyRoot();
+        await this.getWordPressVersion();
+
+        await this.scanPluginFiles();
     }
     /*
      *  Check if this.root is actually the WordPress Root
@@ -35,26 +39,56 @@ class RemoteScanner {
     /*
      * Gets the WordPress Version from the installed WordPress Instance on the Server
      */
-    getWordPressVersion() {}
+    async getWordPressVersion() {
+        if (this.wordpressVersion) return this.wordpressVersion;
+
+        let pathToVersion = "./wp-includes/version.php";
+        let data = await this.connection.getFileData(pathToVersion);
+
+        this.wordpressVersion = data
+            .split("\n")
+            .find((line) => line.includes("wp_version ="))
+            .replaceAll(/[^0-9|.]/g, "");
+
+        return this.wordpressVersion;
+    }
+
+    /*
+     * Gets the Version of a WordPress Plugin
+     */
+    async getPluginVersion(pluginPath) {}
 
     /*
      * Scans the Wordpress Files by comparing the Official Checksums
      * with the Checksums of the Wordpress Instance
      */
-    async scanWordpress() {}
+    async scanWordpressFiles() {}
 
     /*
      * Scans all the Plugins that are installed in the WordPress Instance
      * by comparing the official Plugin Checksums with the Checksums of the Plugin
      * NOTE: does not work with Paid/not Public accessible Plugins
      */
-    async scanPlugins() {}
+    async scanPluginFiles() {
+        let plugins = await this.connection.execCommand("cd ./wp-content/plugins && ls -d */");
+        let report = [];
+
+        if (!plugins) {
+            return report;
+        }
+
+        plugins = plugins.split("\n");
+
+        for await (const plugin of plugins) {
+            console.log(plugin);
+            let pluginEntry = await this.connection.findFileThatContains("./wp-content/plugins/" + plugin, ["Version:", "License", "Text Domain"]);
+        }
+    }
 
     destructor() {
-        if (this.connection) {
-            this.connection.closeConnection();
-        }
+        if (this.connection) this.connection.closeConnection();
     }
 }
 
-module.exports = RemoteScanner;
+//export {RemoteScannerClass};
+export default RemoteScanner;
