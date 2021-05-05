@@ -1,5 +1,6 @@
 /* SSH Connection Class */
 import Connection from "./Connection";
+import axios from "axios";
 //const Connection = require("./Connection");
 
 class RemoteScanner {
@@ -56,7 +57,13 @@ class RemoteScanner {
     /*
      * Gets the Version of a WordPress Plugin
      */
-    async getPluginVersion(pluginPath) {}
+    async getPluginVersion(pluginEntryPath) {
+        let fileData = await this.connection.getFileData(pluginEntryPath);
+        return fileData
+            .split("\n")
+            .find((line) => line.includes("Version:"))
+            .replace(/[^0-9|.]/g, "");
+    }
 
     /*
      * Scans the Wordpress Files by comparing the Official Checksums
@@ -80,9 +87,37 @@ class RemoteScanner {
         plugins = plugins.split("\n");
 
         for await (const plugin of plugins) {
-            console.log(plugin);
+            let pluginName = plugin.replace("/", "");
+
             let pluginEntry = await this.connection.findFileThatContains("./wp-content/plugins/" + plugin, ["Version:", "License", "Text Domain"]);
+
+            if (!pluginEntry) {
+                console.log("Plugin " + plugin + " not found");
+                continue;
+            }
+            console.log("blub");
+
+            let pluginVersion = await this.getPluginVersion(pluginEntry);
+            console.log(pluginVersion);
+
+            let pluginChecksums = await this.pluginChecksum(pluginName, pluginVersion);
         }
+    }
+
+    async pluginChecksum(pluginName, pluginVersion) {
+        var checksums = null;
+
+        await axios
+            .get("https://downloads.wordpress.org/plugin-checksums/" + pluginName + "/" + pluginVersion + ".json", {
+                validateStatus: function (status) {
+                    return status !== 404 || status !== 500;
+                },
+            })
+            .then((response) => {
+                checksums = response.data.files;
+            });
+
+        return checksums;
     }
 
     destructor() {

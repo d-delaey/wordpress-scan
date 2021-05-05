@@ -42,25 +42,32 @@ class Connection {
      */
     async findFileThatContains(path, search) {
         if (!Array.isArray(search)) {
+            return await this.execCommand("grep -rl '" + search + "' " + path);
         }
 
-        let files = [];
+        let command = "";
         for await (const searchItem of search) {
-            let commandResult = await this.execCommand("grep -rl '" + searchItem + "' " + path);
+            command += "grep -rl '" + searchItem + "' " + path;
 
-            files = files.concat(commandResult.split("\n"));
+            if (search.indexOf(searchItem) !== search.length - 1) {
+                command += " && ";
+            }
         }
+
+        let commandResult = await this.execCommand(command);
+
+        let files = commandResult.split("\n");
 
         var counts = {};
-        let EntryFile = null;
         for await (const item of files) {
             counts[item] = (counts[item] || 0) + 1;
             if (counts[item] === search.length) {
-                EntryFile = item;
-                break;
+                return item;
             }
         }
-        return EntryFile;
+
+        //shouldnt land here
+        return null;
     }
 
     /*
@@ -91,8 +98,8 @@ class Connection {
             });
 
             if (output.stderr) {
-                console.error("Command " + command + " has following error:");
-                console.error(output.stderr);
+                //console.error("Command " + command + " has following error:");
+                //console.error(output.stderr);
             }
 
             this.closeConnection();
@@ -113,8 +120,9 @@ class Connection {
 
     async fileExists(filePath) {
         let data = await this.execCommand("ls " + filePath);
+        console.log(data);
 
-        return data.stderr ? false : true;
+        return data ? true : false;
     }
 
     isConnected() {
