@@ -91,18 +91,15 @@ class Connection {
 
             if (this.root) execCommand = "cd " + this.root + " && " + execCommand;
 
-            console.log(execCommand);
-
             await this.ssh.execCommand(execCommand).then((result) => {
                 output = result;
             });
 
             if (output.stderr) {
-                //console.error("Command " + command + " has following error:");
-                //console.error(output.stderr);
+                console.error("Command " + command + " has following error:");
+                console.error(output.stderr);
             }
 
-            this.closeConnection();
             return output.stdout;
         } catch (error) {
             console.error("Command " + command + " cant be executet");
@@ -112,11 +109,6 @@ class Connection {
             process.exit(0);
         }
     }
-
-    /*
-     * generates a hash from a remote file
-     */
-    async getRemoteFileHash(filePath) {}
 
     async fileExists(filePath) {
         let data = await this.execCommand("ls " + filePath);
